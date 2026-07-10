@@ -16,7 +16,7 @@ find_path(onnxruntime_INCLUDE_DIR
     /opt/onnxruntime
     /usr/local
     /usr
-  PATH_SUFFIXES include
+    $ENV{CONDA_PREFIX}/include/onnxruntime/core/session
 )
 
 find_library(onnxruntime_LIBRARY
@@ -27,7 +27,7 @@ find_library(onnxruntime_LIBRARY
     /opt/onnxruntime
     /usr/local
     /usr
-  PATH_SUFFIXES lib lib64
+    ${CONDA_PREFIX}  PATH_SUFFIXES lib lib64
 )
 
 # Handle the QUIETLY and REQUIRED arguments and set onnxruntime_FOUND to TRUE

@@ -5,3 +5,6 @@ build/
 target/
 logs/
 *.trt
+# pixi environments
+.pixi/*
+!.pixi/config.toml
