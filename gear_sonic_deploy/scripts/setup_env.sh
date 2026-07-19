@@ -123,9 +123,27 @@ export OPENSSL_ROOT_DIR="/usr"
 # ROS2 Environment Setup - dynamically find ROS2 installation
 ROS2_FOUND=false
 
+# Conda / pixi ROS2 installation
+if [ -n "${CONDA_PREFIX:-}" ]; then
+    for ros2_setup_file in \
+        "$CONDA_PREFIX/setup.bash" \
+        "$CONDA_PREFIX/local_setup.bash"; do
+
+        if [ -f "$ros2_setup_file" ]; then
+            source "$ros2_setup_file"
+            export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+            export ROS_LOCALHOST_ONLY=1
+            export HAS_ROS2=1
+            ROS2_FOUND=true
+            echo "✅ ROS2 found in conda environment: $CONDA_PREFIX"
+            break
+        fi
+    done
+fi
+
 # Common ROS2 distributions in order of preference (newest first)
 ROS2_DISTROS=("jazzy" "iron" "humble" "galactic" "foxy" "eloquent" "dashing" "crystal")
-ROS2_INSTALL_PATHS=("/opt/ros" "/usr/local/ros" "$HOME/ros2_ws/install")
+ROS2_INSTALL_PATHS=("/opt/ros" "/usr/local/ros" "$HOME/ros2_ws/install" )
 
 for install_path in "${ROS2_INSTALL_PATHS[@]}"; do
     if [ "$ROS2_FOUND" = true ]; then

@@ -486,7 +486,14 @@ echo -e "${BLUE}[Step 3/4]${NC} Setting up environment and building..."
 # Source the environment setup script
 echo "Sourcing environment setup..."
 set +e  # Temporarily allow errors (for jetson_clocks on non-Jetson systems)
-source scripts/setup_env.sh
+if [[ -n "${CONDA_PREFIX:-}" ]]; then
+    # Pixi already provides CUDA, TensorRT, and the compiler toolchain. Only
+    # activate ROS here; the full setup also performs host-level Git LFS and
+    # Jetson configuration that is unnecessary inside a Pixi environment.
+    source scripts/setup_ros.sh
+else
+    source scripts/setup_env.sh
+fi
 set -e  # Re-enable exit on error
 
 # Always build to ensure we have the latest version
@@ -523,15 +530,17 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 echo -e "${YELLOW}The following command will be executed:${NC}"
 echo ""
-echo -e "${BLUE}just run g1_deploy_onnx_ref $TARGET $CHECKPOINT_DECODER $MOTION_DATA \\${NC}"
-echo -e "${BLUE}    --obs-config $OBS_CONFIG \\${NC}"
-echo -e "${BLUE}    --encoder-file $CHECKPOINT_ENCODER \\${NC}"
-echo -e "${BLUE}    --planner-file $PLANNER \\${NC}"
-echo -e "${BLUE}    --input-type $INPUT_TYPE \\${NC}"
-echo -e "${BLUE}    --output-type $OUTPUT_TYPE \\${NC}"
-echo -e "${BLUE}    --zmq-host $ZMQ_HOST${NC}"
+echo "just run g1_deploy_onnx_ref $TARGET $CHECKPOINT_DECODER $MOTION_DATA \\"
+echo "    --obs-config $OBS_CONFIG \\"
+echo "    --encoder-file $CHECKPOINT_ENCODER \\"
+echo "    --planner-file $PLANNER \\"
+echo "    --input-type $INPUT_TYPE \\"
+echo "    --output-type $OUTPUT_TYPE \\"
 if [[ -n "$EXTRA_ARGS" ]]; then
-echo -e "${BLUE}    $EXTRA_ARGS${NC}"
+    echo "    --zmq-host $ZMQ_HOST \\"
+    echo "    $EXTRA_ARGS"
+else
+    echo "    --zmq-host $ZMQ_HOST"
 fi
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"

@@ -232,6 +232,15 @@ set(BUILD_EXAMPLES
 
 add_subdirectory(thirdparty/unitree_sdk2)
 
+# Unitree SDK2 is built against the Cyclone DDS libraries bundled with the
+# SDK. ROS installations (including RoboStack/Pixi) may provide another
+# libddsc.so.0 with the same SONAME but an incompatible ABI. Keep the matching
+# Unitree libraries first in the build RPATH so the dynamic loader cannot pick
+# the ROS environment's copy and corrupt DDS type data at runtime.
+set(UNITREE_DDS_LIBRARY_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/unitree_sdk2/thirdparty/lib/${CMAKE_SYSTEM_PROCESSOR}")
+list(PREPEND CMAKE_BUILD_RPATH "${UNITREE_DDS_LIBRARY_DIR}")
+
 # Add unitree_sdk2 include directories
 target_include_directories(${PROJECT_NAME}
                            INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/unitree_sdk2/include)
