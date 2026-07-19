@@ -3627,6 +3627,7 @@ class G1Deploy {
             bool movement_mode_changed = false;
             bool movement_speed_changed = false;
             bool movement_direction_changed = false;
+            bool specific_target_changed = false;
             bool under_static_motion_mode = is_static_motion_mode(static_cast<LocomotionMode>(last_movement_state_.locomotion_mode));
 
             // Read current movement mode from thread-safe buffer
@@ -3647,6 +3648,13 @@ class G1Deploy {
               movement_direction_changed = movement_state_data.data->movement_direction[0] != last_movement_state_.movement_direction[0] || 
                                           movement_state_data.data->movement_direction[1] != last_movement_state_.movement_direction[1] || 
                                           movement_state_data.data->movement_direction[2] != last_movement_state_.movement_direction[2];
+              // Entering or leaving direct-target mode must replan immediately.
+              // Target coordinates themselves are sampled by the normal
+              // locomotion replan timer below. Treating every rolling target
+              // update as an immediate change replans at 10 Hz and continuously
+              // restarts the 8-frame animation blend, freezing gait/arm motion.
+              specific_target_changed =
+                  movement_state_data.data->specific_target.enabled != last_movement_state_.specific_target.enabled;
               // bool of checking if the last movement value is under the static motion mode
               under_static_motion_mode = is_static_motion_mode(static_cast<LocomotionMode>(movement_state_data.data->locomotion_mode));
             }
@@ -3690,7 +3698,7 @@ class G1Deploy {
               }
             }
             
-            if (movement_mode_changed || facing_direction_changed || height_changed) {
+            if (movement_mode_changed || facing_direction_changed || height_changed || specific_target_changed) {
               need_replan = true;
             } else if (!under_static_motion_mode && (movement_speed_changed || movement_direction_changed || (time_to_replan && movement_state_data.data->movement_speed != 0))) {
               need_replan = true;
@@ -3708,6 +3716,7 @@ class G1Deploy {
             std::array<float, 3> facing_direction = {1.0f, 0.0f, 0.0f};  // Default forward
             float movement_speed = -1.0f;
             float target_height = -1.0f;
+            PlannerSpecificTarget specific_target;
             
             if (movement_state_data.data) {
               current_mode = movement_state_data.data->locomotion_mode;
@@ -3719,6 +3728,7 @@ class G1Deploy {
               facing_direction[2] = movement_state_data.data->facing_direction[2];
               movement_speed = movement_state_data.data->movement_speed;
               target_height = movement_state_data.data->height;
+              specific_target = movement_state_data.data->specific_target;
 
               // Update last movement state for next iteration comparison (update here to avoid missing the update)
               last_movement_state_.locomotion_mode = movement_state_data.data->locomotion_mode;
@@ -3726,6 +3736,7 @@ class G1Deploy {
               last_movement_state_.facing_direction = movement_state_data.data->facing_direction;
               last_movement_state_.movement_speed = movement_state_data.data->movement_speed;
               last_movement_state_.height = movement_state_data.data->height;
+              last_movement_state_.specific_target = movement_state_data.data->specific_target;
             }
             
             try {
@@ -3739,7 +3750,8 @@ class G1Deploy {
                 movement_speed,
                 target_height,
                 movement_direction,
-                facing_direction
+                facing_direction,
+                specific_target
               )) {
                 throw std::runtime_error("Error when updating planner");
               }
@@ -4468,4 +4480,3 @@ int main(int argc, char const* argv[]) {
   std::cout << "[DEBUG] Program exiting normally..." << std::endl;
   return 0;
 }
-

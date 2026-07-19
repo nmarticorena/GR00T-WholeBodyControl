@@ -51,6 +51,13 @@ struct PlannerState {
     bool initialized = false;   ///< True after the first successful inference.
 };
 
+/** One planner token: four consecutive world-frame root targets at 30 Hz. */
+struct PlannerSpecificTarget {
+    bool enabled = false;
+    std::array<double, 12> positions{};  ///< frame-major (x, y, z) × 4
+    std::array<double, 4> headings{};    ///< absolute yaw (radians) × 4
+};
+
 /**
  * @brief Per-tick locomotion command passed from input interfaces to the planner.
  *
@@ -63,13 +70,16 @@ struct MovementState {
     std::array<double, 3> facing_direction;      ///< Unit vector: desired facing direction [x,y,z].
     double movement_speed;                        ///< Desired speed (−1 = mode default, 0 = stationary).
     double height;                                ///< Desired body height (−1 = mode default).
+    PlannerSpecificTarget specific_target;        ///< Optional direct four-frame target token.
 
     MovementState(int mode = 0, 
                      const std::array<double, 3>& movement = {0.0, 0.0, 0.0},
                      const std::array<double, 3>& facing = {1.0, 0.0, 0.0},
                      double speed = 0.0,
-                     double height = 0.0)
-        : locomotion_mode(mode), movement_direction(movement), facing_direction(facing), movement_speed(speed), height(height) {}
+                     double height = 0.0,
+                     const PlannerSpecificTarget& target = {})
+        : locomotion_mode(mode), movement_direction(movement), facing_direction(facing),
+          movement_speed(speed), height(height), specific_target(target) {}
   };
 
 /**
@@ -348,6 +358,7 @@ public:
             -1.0,
             {0.0f, 0.0f, 0.0f},  // No movement
             {1.0f, 0.0f, 0.0f},  // Face in robot's current yaw direction
+            {},
             current_random_seed_
         );
 
@@ -538,6 +549,7 @@ public:
         float target_height,
         const std::array<float, 3>& movement_direction,
         const std::array<float, 3>& facing_direction,
+        const PlannerSpecificTarget& specific_target = {},
         int random_seed = -1)
     {
 
@@ -551,7 +563,8 @@ public:
         auto gather_input_start_time = std::chrono::steady_clock::now();
 
         // Update input tensors with new values
-        UpdateInputTensors(mode_value, target_vel, target_height, movement_direction, facing_direction, random_seed);
+        UpdateInputTensors(mode_value, target_vel, target_height, movement_direction,
+                           facing_direction, specific_target, random_seed);
         
         // Update context and get frame information
         gen_frame_ = gen_frame + config_.motion_look_ahead_steps;
@@ -690,6 +703,7 @@ public:
         float target_height,
         const std::array<float, 3>& movement_direction,
         const std::array<float, 3>& facing_direction,
+        const PlannerSpecificTarget& specific_target,
         int random_seed) = 0;
 
 

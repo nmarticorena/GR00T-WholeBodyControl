@@ -591,12 +591,21 @@ class ZMQManager : public InputInterface {
           has_hand_joints_ = latest_planner_message_.left_hand_joints.has_value() || 
                              latest_planner_message_.right_hand_joints.has_value();
 
+          PlannerSpecificTarget specific_target;
+          if (latest_planner_message_.specific_target_positions.has_value() &&
+              latest_planner_message_.specific_target_headings.has_value()) {
+            specific_target.enabled = true;
+            specific_target.positions = *latest_planner_message_.specific_target_positions;
+            specific_target.headings = *latest_planner_message_.specific_target_headings;
+          }
+
           MovementState mode_state(
             latest_planner_message_.mode,
             latest_planner_message_.movement,
             latest_planner_message_.facing,
             latest_planner_message_.speed,
-            latest_planner_message_.height
+            latest_planner_message_.height,
+            specific_target
           );
 
           if (is_squat_motion_mode(static_cast<LocomotionMode>(mode_state.locomotion_mode))) {
@@ -776,6 +785,7 @@ class ZMQManager : public InputInterface {
       int upper_body_position_idx = -1, upper_body_velocity_idx = -1;
       int left_hand_joints_idx = -1, right_hand_joints_idx = -1;
       int vr_position_idx = -1, vr_orientation_idx = -1, vr_compliance_idx = -1;
+      int specific_target_positions_idx = -1, specific_target_headings_idx = -1;
 
       for (size_t i = 0; i < hdr.fields.size(); ++i) {
         const auto& f = hdr.fields[i];
@@ -791,6 +801,8 @@ class ZMQManager : public InputInterface {
         else if (f.name == "vr_position") vr_position_idx = static_cast<int>(i);
         else if (f.name == "vr_orientation") vr_orientation_idx = static_cast<int>(i);
         else if (f.name == "vr_compliance") vr_compliance_idx = static_cast<int>(i);
+        else if (f.name == "specific_target_positions") specific_target_positions_idx = static_cast<int>(i);
+        else if (f.name == "specific_target_headings") specific_target_headings_idx = static_cast<int>(i);
       }
       
       if (mode_idx < 0 || movement_idx < 0 || facing_idx < 0) {
@@ -880,6 +892,72 @@ class ZMQManager : public InputInterface {
           if (needs_swap) val = byte_swap(val);
           msg.height = val;
         }
+      }
+
+      // Optional direct planner target. Both fields form one four-frame token
+      // and must be supplied together.
+      if ((specific_target_positions_idx >= 0) != (specific_target_headings_idx >= 0)) {
+        std::cerr << "[ZMQManager] Direct target requires both "
+                  << "specific_target_positions and specific_target_headings" << std::endl;
+        return;
+      }
+      if (specific_target_positions_idx >= 0) {
+        const auto& positions_field = hdr.fields[specific_target_positions_idx];
+        const auto& positions_buf = bufs[specific_target_positions_idx];
+        const auto& headings_field = hdr.fields[specific_target_headings_idx];
+        const auto& headings_buf = bufs[specific_target_headings_idx];
+        const bool positions_shape_ok =
+            (positions_field.shape.size() == 1 && positions_field.shape[0] == 12) ||
+            (positions_field.shape.size() == 2 && positions_field.shape[0] == 4 &&
+             positions_field.shape[1] == 3);
+        const bool headings_shape_ok =
+            headings_field.shape.size() == 1 && headings_field.shape[0] == 4;
+        const bool dtype_ok =
+            (positions_field.dtype == "f32" || positions_field.dtype == "f64") &&
+            (headings_field.dtype == "f32" || headings_field.dtype == "f64");
+        if (!positions_shape_ok || !headings_shape_ok || !dtype_ok) {
+          std::cerr << "[ZMQManager] Invalid direct target shape or dtype; expected "
+                    << "positions f32/f64[4,3] and headings f32/f64[4]" << std::endl;
+          return;
+        }
+
+        const size_t position_stride = positions_field.dtype == "f32" ? sizeof(float) : sizeof(double);
+        const size_t heading_stride = headings_field.dtype == "f32" ? sizeof(float) : sizeof(double);
+        if (positions_buf.size < 12 * position_stride || headings_buf.size < 4 * heading_stride) {
+          std::cerr << "[ZMQManager] Direct target payload is truncated" << std::endl;
+          return;
+        }
+
+        std::array<double, 12> positions{};
+        std::array<double, 4> headings{};
+        for (size_t i = 0; i < positions.size(); ++i) {
+          if (positions_field.dtype == "f32") {
+            float value;
+            std::memcpy(&value, static_cast<const uint8_t*>(positions_buf.data) + i * sizeof(float), sizeof(float));
+            if (needs_swap) value = byte_swap(value);
+            positions[i] = static_cast<double>(value);
+          } else {
+            double value;
+            std::memcpy(&value, static_cast<const uint8_t*>(positions_buf.data) + i * sizeof(double), sizeof(double));
+            if (needs_swap) value = byte_swap(value);
+            positions[i] = value;
+          }
+        }
+        for (size_t i = 0; i < headings.size(); ++i) {
+          if (headings_field.dtype == "f32") {
+            float value;
+            std::memcpy(&value, static_cast<const uint8_t*>(headings_buf.data) + i * sizeof(float), sizeof(float));
+            if (needs_swap) value = byte_swap(value);
+            headings[i] = static_cast<double>(value);
+          } else {
+            double value;
+            std::memcpy(&value, static_cast<const uint8_t*>(headings_buf.data) + i * sizeof(double), sizeof(double));
+            if (needs_swap) value = byte_swap(value);
+            headings[i] = value;
+          }
+        }
+        msg.specific_target_positions = positions;
+        msg.specific_target_headings = headings;
       }
 
       // Optional: upper_body_position (17 DOF, decode based on dtype)

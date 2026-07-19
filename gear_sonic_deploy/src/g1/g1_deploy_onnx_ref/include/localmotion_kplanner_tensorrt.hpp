@@ -379,6 +379,7 @@ private:
                            float target_height,
                            const std::array<float, 3>& movement_direction,
                            const std::array<float, 3>& facing_direction,
+                           const PlannerSpecificTarget& specific_target,
                            int random_seed) override {
         // Update mode
         if (mode_value < 0 || mode_value >= GetValidModeValueRange()) {
@@ -404,6 +405,18 @@ private:
         facing_direction_values_[0] = facing_direction[0];
         facing_direction_values_[1] = facing_direction[1];
         facing_direction_values_[2] = facing_direction[2];
+
+        if (config_.version == 1 || config_.version == 2) {
+            has_specific_target_[0] = specific_target.enabled ? 1 : 0;
+            for (size_t i = 0; i < specific_target_positions_.size(); ++i) {
+                specific_target_positions_[i] = specific_target.enabled
+                    ? static_cast<float>(specific_target.positions[i]) : 0.0f;
+            }
+            for (size_t i = 0; i < specific_target_headings_.size(); ++i) {
+                specific_target_headings_[i] = specific_target.enabled
+                    ? static_cast<float>(specific_target.headings[i]) : 0.0f;
+            }
+        }
         
         // Update random seed if provided
         if (random_seed != -1) {
