@@ -19,7 +19,7 @@ static void run_local_publisher(const std::string &bind_endpoint,
                                 int interval_ms,
                                 bool ramp_prefix)
 {
-  constexpr size_t HEADER_SIZE = 1024;
+  constexpr size_t HEADER_SIZE = ZMQPackedMessageSubscriber::HEADER_SIZE;
   
   try {
     zmq::context_t ctx(1);
